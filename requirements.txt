@@ -1,0 +1,27 @@
+# 核心依赖
+pip
+setuptools
+wheel
+# 科学计算
+numpy
+scipy
+pandas
+matplotlib
+scikit-learn
+h5py
+netcdf4
+# 轨道与天文
+# astropy
+# poliastro
+# skyfield
+# pyephem
+# jplephem
+# sgp4
+# AI/ML (根据需要选择)
+# tensorflow
+# torch
+# 其他常用库
+requests
+opencv-python
+pillow
+lxml

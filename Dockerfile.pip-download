@@ -1,0 +1,38 @@
+# 使用一个相对精简的 Python 基础镜像
+FROM python:3.10-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 配置 pip 使用阿里云镜像源以加速下载
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set install.trusted-host mirrors.aliyun.com
+
+# 安装必要的系统工具和编译依赖（部分Python包需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  gcc \
+  g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+# 安装 pypiserver
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir pypiserver
+
+# 复制 requirements.txt
+COPY requirements.txt .
+
+# 创建包存储目录
+RUN mkdir -p /opt/pypi/packages
+
+# 使用 pip download 下载所有包及其依赖（从国内镜像源）
+# 这比 bandersnatch 快得多，因为完全使用国内镜像
+RUN pip download -d /opt/pypi/packages -r requirements.txt
+
+# 暴露端口
+EXPOSE 8080
+
+# 设置容器启动命令
+# 启动 pypiserver，让它服务于我们下载好的包目录
+# -a . 表示允许所有动作，-P . 表示无密码认证
+CMD ["pypi-server", "run", "-p", "8080", "-a", ".", "-P", ".", "/opt/pypi/packages"]
+
