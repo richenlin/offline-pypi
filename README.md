@@ -187,16 +187,3 @@ docker rm offline-pypi          # 删除
 - **包存储**: ~183 MB（取决于 requirements.txt）
 - **默认端口**: 8080
 
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
-
-MIT License
-
----
-
-**更新日期**: 2025-10-02  
-**版本**: 1.0.0
-
