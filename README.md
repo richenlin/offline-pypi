@@ -9,6 +9,7 @@
 - 📦 **易于使用**：标准 pip 安装流程，无需额外配置
 - 🔧 **灵活配置**：轻松自定义包列表
 - 🐳 **容器化部署**：基于 Docker，一键启动
+- 🖥️ **多平台支持**：同时支持 Windows 和 Linux 客户端（可配置）
 
 ## 项目概述
 
@@ -29,6 +30,8 @@
 - `Dockerfile.pip-download`: 推荐使用的快速构建文件
 - `Dockerfile`: 使用 bandersnatch 的完整方案
 - `requirements.txt`: 需要镜像的 Python 包列表
+- `platforms.conf`: 平台配置文件，定义支持的操作系统
+- `python_versions.conf`: Python 版本配置文件，定义支持的 Python 版本
 - `bandersnatch.conf`: Bandersnatch 配置文件（仅 Dockerfile 使用）
 - `sync_packages.sh`: 自动同步脚本（仅 Dockerfile 使用）
 - `USER_GUIDE.md`: 详细使用手册
@@ -120,11 +123,16 @@ docker run -d -p 8080:8080 \
 docker run -d -p 0.0.0.0:8080:8080 --name offline-pypi offline-pypi:latest
 ```
 
-客户端使用：
+**Linux/macOS 客户端**：
 ```bash
 pip install --index-url http://192.168.1.100:8080/simple/ \
   --trusted-host 192.168.1.100 \
   numpy
+```
+
+**Windows 客户端**：
+```cmd
+pip install --index-url http://192.168.1.100:8080/simple/ --trusted-host 192.168.1.100 numpy
 ```
 
 ### 自动重启
@@ -150,11 +158,17 @@ docker run -d -p 8080:8080 \
 
 ## 💡 常见问题
 
+**Q: 支持哪些操作系统？**  
+A: 默认支持 Windows 64位和 Linux。可通过编辑 `platforms.conf` 文件添加更多平台（如 Windows 32位、macOS 等）。
+
 **Q: 为什么安装包时提示 "No matching distribution found"？**  
-A: 镜像使用 Python 3.10 构建，只包含 cp310 的 wheel 文件。请确保使用 Python 3.10 环境，或重新构建镜像时使用目标 Python 版本。
+A: 可能原因：
+1. 默认支持 Python 3.10，请确保客户端版本匹配
+2. 某些包可能没有预编译的 wheel 文件（纯源码包）
+3. 如需支持其他 Python 版本，编辑 `python_versions.conf` 文件
 
 **Q: 如何支持多个 Python 版本？**  
-A: 查看 [USER_GUIDE.md](USER_GUIDE.md) 中的"常见问题"章节。
+A: 编辑 `python_versions.conf` 文件，取消需要版本的注释，然后重新构建镜像。
 
 **Q: 容器管理命令？**
 ```bash

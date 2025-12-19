@@ -18,15 +18,102 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir pypiserver
 
-# 复制 requirements.txt
+# 复制配置文件
 COPY requirements.txt .
+COPY platforms.conf .
+COPY python_versions.conf .
 
 # 创建包存储目录
 RUN mkdir -p /opt/pypi/packages
 
-# 使用 pip download 下载所有包及其依赖（从国内镜像源）
-# 这比 bandersnatch 快得多，因为完全使用国内镜像
-RUN pip download -d /opt/pypi/packages -r requirements.txt
+# 创建下载脚本
+RUN cat > /app/download_packages.sh << 'EOF'
+#!/bin/bash
+set -e
+
+REQUIREMENTS_FILE="/app/requirements.txt"
+PLATFORMS_FILE="/app/platforms.conf"
+PYTHON_VERSIONS_FILE="/app/python_versions.conf"
+PACKAGES_DIR="/opt/pypi/packages"
+
+echo "=========================================="
+echo "       开始下载 Python 包"
+echo "=========================================="
+echo ""
+
+# 读取 Python 版本配置
+read_python_versions() {
+    local versions=()
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+            continue
+        fi
+        versions+=("$line")
+    done < "$PYTHON_VERSIONS_FILE"
+    echo "${versions[@]}"
+}
+
+# 读取平台配置
+read_platforms() {
+    local platforms=()
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+            continue
+        fi
+        platforms+=("$line")
+    done < "$PLATFORMS_FILE"
+    echo "${platforms[@]}"
+}
+
+# 获取配置
+PYTHON_VERSIONS=($(read_python_versions))
+PLATFORMS=($(read_platforms))
+
+echo "配置信息:"
+echo "  Python 版本: ${PYTHON_VERSIONS[*]}"
+echo "  目标平台: ${PLATFORMS[*]}"
+echo ""
+
+# 首先下载当前平台的包（包含所有依赖）
+echo "=========================================="
+echo ">>> 步骤 1: 下载当前平台包及所有依赖"
+echo "=========================================="
+pip download -d "$PACKAGES_DIR" -r "$REQUIREMENTS_FILE"
+echo ""
+
+# 为每个 Python 版本和平台组合下载包
+echo "=========================================="
+echo ">>> 步骤 2: 下载多版本多平台包"
+echo "=========================================="
+
+for py_version in "${PYTHON_VERSIONS[@]}"; do
+    for platform in "${PLATFORMS[@]}"; do
+        echo ""
+        echo ">>> 下载: Python $py_version + $platform"
+        
+        pip download -d "$PACKAGES_DIR" -r "$REQUIREMENTS_FILE" \
+            --platform "$platform" \
+            --python-version "$py_version" \
+            --only-binary=:all: \
+            --no-deps || echo "警告: 部分包可能没有 Python $py_version + $platform 的预编译版本"
+    done
+done
+
+echo ""
+echo "=========================================="
+echo "           下载完成"
+echo "=========================================="
+echo "包目录: $PACKAGES_DIR"
+echo "包数量: $(ls -1 "$PACKAGES_DIR" | wc -l)"
+echo ""
+EOF
+
+RUN chmod +x /app/download_packages.sh
+
+# 执行下载脚本
+RUN /app/download_packages.sh
 
 # 暴露端口
 EXPOSE 8080
@@ -35,4 +122,3 @@ EXPOSE 8080
 # 启动 pypiserver，让它服务于我们下载好的包目录
 # -a . 表示允许所有动作，-P . 表示无密码认证
 CMD ["pypi-server", "run", "-p", "8080", "-a", ".", "-P", ".", "/opt/pypi/packages"]
-

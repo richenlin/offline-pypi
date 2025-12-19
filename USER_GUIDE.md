@@ -25,6 +25,7 @@
 - ✅ 支持标准的 pip 安装流程
 - ✅ 包含常用的科学计算和数据处理库
 - ✅ 无需认证，易于部署
+- ✅ 多平台支持：Windows、Linux（可通过配置文件扩展）
 
 ### 系统要求
 
@@ -106,6 +107,78 @@ your-package-name
 ```
 
 然后重新构建镜像。
+
+### 自定义平台支持
+
+编辑 `platforms.conf` 文件，配置需要支持的操作系统平台：
+
+```text
+# 平台配置文件
+# 每行一个平台标签，注释行以 # 开头
+
+# Linux 64位（默认启用）
+manylinux2014_x86_64
+
+# Windows 64位（默认启用）
+win_amd64
+
+# Windows 32位（取消注释以启用）
+# win32
+
+# macOS Intel（取消注释以启用）
+# macosx_10_9_x86_64
+
+# macOS Apple Silicon（取消注释以启用）
+# macosx_11_0_arm64
+```
+
+**常用平台标签**：
+
+| 平台 | 标签 |
+|------|------|
+| Linux 64位 | `manylinux2014_x86_64` 或 `manylinux_2_17_x86_64` |
+| Windows 64位 | `win_amd64` |
+| Windows 32位 | `win32` |
+| macOS Intel | `macosx_10_9_x86_64` |
+| macOS ARM | `macosx_11_0_arm64` |
+
+修改后重新构建镜像即可。
+
+### 自定义 Python 版本支持
+
+编辑 `python_versions.conf` 文件，配置需要支持的 Python 版本：
+
+```text
+# Python 版本配置文件
+# 每行一个版本号，格式: 主版本+次版本
+
+# Python 3.10 (默认启用)
+310
+
+# Python 3.11 (取消注释以启用)
+# 311
+
+# Python 3.12 (取消注释以启用)
+# 312
+
+# Python 3.9 (取消注释以启用)
+# 39
+```
+
+**常用版本号**：
+
+| Python 版本 | 配置值 |
+|-------------|--------|
+| Python 3.8  | `38`   |
+| Python 3.9  | `39`   |
+| Python 3.10 | `310`  |
+| Python 3.11 | `311`  |
+| Python 3.12 | `312`  |
+| Python 3.13 | `313`  |
+
+修改后重新构建镜像即可。
+
+> **注意**：启用多个版本会增加镜像大小和构建时间。
 
 ### 构建参数
 
@@ -245,6 +318,124 @@ pip config set install.trusted-host localhost
 # 安装包
 pip install numpy
 ```
+
+---
+
+## Windows 客户端使用指南
+
+本镜像服务支持 Windows 客户端，以下是详细的使用方法。
+
+### 前提条件
+
+- Windows 10/11
+- Python 3.10 已安装
+- 能够访问运行 pypiserver 的服务器
+
+### 方法 1: 命令提示符 (CMD)
+
+**临时使用**：
+
+```cmd
+pip install --index-url http://SERVER_IP:8080/simple/ --trusted-host SERVER_IP numpy
+```
+
+**配置为默认源**：
+
+```cmd
+pip config set global.index-url http://SERVER_IP:8080/simple/
+pip config set install.trusted-host SERVER_IP
+```
+
+配置后直接使用：
+
+```cmd
+pip install numpy pandas matplotlib
+```
+
+### 方法 2: PowerShell
+
+**临时使用**：
+
+```powershell
+pip install --index-url http://SERVER_IP:8080/simple/ --trusted-host SERVER_IP numpy
+```
+
+**配置为默认源**：
+
+```powershell
+pip config set global.index-url http://SERVER_IP:8080/simple/
+pip config set install.trusted-host SERVER_IP
+```
+
+### 方法 3: 使用 pip.ini 配置文件
+
+在 Windows 上，pip 配置文件位于：
+- 用户级：`%APPDATA%\pip\pip.ini`
+- 全局级：`C:\ProgramData\pip\pip.ini`
+
+创建或编辑 `%APPDATA%\pip\pip.ini`：
+
+```ini
+[global]
+index-url = http://SERVER_IP:8080/simple/
+trusted-host = SERVER_IP
+```
+
+> 将 `SERVER_IP` 替换为实际的服务器 IP 地址，如 `192.168.1.100`
+
+### 方法 4: 在 Windows 虚拟环境中使用
+
+```cmd
+:: 创建虚拟环境
+python -m venv myenv
+
+:: 激活虚拟环境
+myenv\Scripts\activate
+
+:: 配置 pip 源
+pip config set global.index-url http://SERVER_IP:8080/simple/
+pip config set install.trusted-host SERVER_IP
+
+:: 安装包
+pip install numpy pandas
+```
+
+### 方法 5: 使用 requirements.txt
+
+创建 `requirements.txt` 文件：
+
+```text
+--index-url http://SERVER_IP:8080/simple/
+--trusted-host SERVER_IP
+
+numpy
+pandas
+matplotlib
+```
+
+然后安装：
+
+```cmd
+pip install -r requirements.txt
+```
+
+### Windows 常见问题
+
+**Q: 提示 "No matching distribution found"？**
+
+可能原因：
+1. Python 版本不匹配 - 确保使用 Python 3.10
+2. 检查 Python 版本：`python --version`
+
+**Q: 连接超时？**
+
+1. 检查防火墙是否允许访问 8080 端口
+2. 确认服务器 IP 地址正确
+3. 测试连接：在浏览器中访问 `http://SERVER_IP:8080/`
+
+**Q: SSL 证书错误？**
+
+确保添加了 `--trusted-host` 参数，或在 pip.ini 中配置。
 
 ---
 
@@ -392,49 +583,71 @@ docker run -d -p 8080:8080 \
 
 ## 常见问题
 
-### Q1: 为什么安装包时提示 "No matching distribution found"？
+### Q1: 支持哪些操作系统和平台？
 
-**原因**：仓库中的包版本与你的 Python 版本不匹配。
+**默认支持的平台**：
+- ✅ Windows 64位 (win_amd64)
+- ✅ Linux x86_64 (manylinux2014_x86_64)
+
+**可选平台**（编辑 `platforms.conf` 启用）：
+- Windows 32位 (win32)
+- macOS Intel (macosx_10_9_x86_64)
+- macOS Apple Silicon (macosx_11_0_arm64)
+
+通过编辑 `platforms.conf` 文件可以自定义支持的平台。
+
+### Q2: 为什么安装包时提示 "No matching distribution found"？
+
+**原因**：仓库中的包版本与你的 Python 版本或平台不匹配。
 
 **解决方案**：
 - 镜像使用 Python 3.10 构建，只包含 cp310 的 wheel 文件
 - 确保你的环境也使用 Python 3.10
+- 某些包可能没有预编译的 wheel（如纯 C 扩展），需要源码编译
 - 或者重新构建镜像时使用你需要的 Python 版本
 
-### Q2: 如何支持多个 Python 版本？
+### Q4: 如何支持多个 Python 版本？
 
-修改 `Dockerfile.pip-download`，在多个 Python 版本下下载包：
+编辑 `python_versions.conf` 文件，取消需要版本的注释：
 
-```dockerfile
-# 安装多个 Python 版本
-RUN apt-get update && apt-get install -y \
-  python3.10 python3.11 python3.12
+```text
+# Python 3.10 (默认启用)
+310
 
-# 为每个版本下载包
-RUN python3.10 -m pip download -d /opt/pypi/packages -r requirements.txt && \
-    python3.11 -m pip download -d /opt/pypi/packages -r requirements.txt && \
-    python3.12 -m pip download -d /opt/pypi/packages -r requirements.txt
+# 启用 Python 3.11
+311
+
+# 启用 Python 3.12
+312
 ```
 
-### Q3: 构建镜像时下载速度慢怎么办？
+然后重新构建镜像：
+
+```bash
+docker build -f Dockerfile.pip-download -t offline-pypi:latest .
+```
+
+构建时会自动为每个 Python 版本 + 平台组合下载包。
+
+### Q5: 构建镜像时下载速度慢怎么办？
 
 - 确保 `Dockerfile.pip-download` 中配置了国内镜像源（阿里云/清华）
 - 检查网络连接
 - 尝试在网络较好的时段构建
 
-### Q4: 如何查看镜像大小？
+### Q6: 如何查看镜像大小？
 
 ```bash
 docker images offline-pypi
 ```
 
-### Q5: 容器占用多少内存？
+### Q7: 容器占用多少内存？
 
 ```bash
 docker stats offline-pypi
 ```
 
-### Q6: 可以在生产环境使用吗？
+### Q8: 可以在生产环境使用吗？
 
 可以，但建议：
 - 启用认证保护
@@ -443,7 +656,7 @@ docker stats offline-pypi
 - 配置自动重启策略
 - 定期备份
 
-### Q7: 如何添加自己的私有包？
+### Q9: 如何添加自己的私有包？
 
 ```bash
 # 将本地 wheel 文件复制到容器
