@@ -2,7 +2,8 @@
 
 ## 📖 目录
 
-- [快速开始](#快速开始)
+- [快速开始](#快速开始推荐方案磁盘映射)
+- [备选方案](#备选方案包内置镜像)
 - [下载脚本使用](#下载脚本使用)
 - [运行容器](#运行容器)
 - [使用 pip 安装包](#使用-pip-安装包)
@@ -14,6 +15,8 @@
 ---
 
 ## 快速开始
+
+此方案将 Python 包存储在本地目录，通过磁盘映射提供服务。**更新包时无需重建镜像**，是推荐的部署方式。
 
 ### 1. 克隆或下载项目
 
@@ -65,6 +68,37 @@ docker run -d -p 8080:8080 \
 
 ```bash
 pip install --index-url http://localhost:8080/simple/ --trusted-host localhost numpy
+```
+
+---
+
+## 备选方案
+
+如果你无法使用外部存储或需要完全自包含的镜像，可以使用内置方案。此方案将 Python 包直接构建到 Docker 镜像中。
+
+> ⚠️ **注意**：每次更新包都需要重新构建镜像，镜像体积较大。推荐优先使用上述磁盘映射方案。
+
+### 构建内置镜像
+
+```bash
+docker build -f Dockerfile.pip-download -t offline-pypi-builtin:latest .
+```
+
+### 运行内置镜像
+
+```bash
+docker run -d -p 8080:8080 --name offline-pypi offline-pypi-builtin:latest
+```
+
+### 更新包
+
+```bash
+# 需要重新构建镜像
+docker build -f Dockerfile.pip-download -t offline-pypi-builtin:latest .
+
+# 重启容器
+docker stop offline-pypi && docker rm offline-pypi
+docker run -d -p 8080:8080 --name offline-pypi offline-pypi-builtin:latest
 ```
 
 ---
@@ -641,10 +675,12 @@ cp your-private-package.whl packages/
 
 ### Q1: 两种方案如何选择？
 
+**推荐使用磁盘映射方案**，除非有特殊需求。
+
 | 方案 | 适用场景 | 特点 |
 |------|----------|------|
-| 磁盘映射（推荐） | 包需要经常更新、有外部存储、开发测试环境 | 更新方便，镜像小 |
-| 内置镜像 | 无法挂载外部存储、包列表固定、生产环境 | 部署简单，自包含 |
+| **磁盘映射（推荐）** | 包需要经常更新、有外部存储、开发测试环境、生产环境 | 更新方便，镜像小（~150MB），热更新 |
+| 内置镜像 | 无法挂载外部存储、包列表固定、需要完全自包含 | 部署简单，但镜像大，更新需重建 |
 
 ### Q2: 支持哪些操作系统和平台？
 
