@@ -2,36 +2,14 @@
 
 ## 📖 目录
 
-- [简介](#简介)
 - [快速开始](#快速开始)
-- [构建镜像](#构建镜像)
+- [下载脚本使用](#下载脚本使用)
 - [运行容器](#运行容器)
 - [使用 pip 安装包](#使用-pip-安装包)
 - [高级配置](#高级配置)
 - [维护与更新](#维护与更新)
 - [常见问题](#常见问题)
 - [故障排除](#故障排除)
-
----
-
-## 简介
-
-这是一个轻量级的离线 Python 包仓库解决方案，基于 `pypiserver` 构建。它可以让你在无网络或网络受限的环境中安装 Python 包。
-
-### 特性
-
-- ✅ 轻量级，镜像大小约 780 MB
-- ✅ 使用国内镜像源加速构建
-- ✅ 支持标准的 pip 安装流程
-- ✅ 包含常用的科学计算和数据处理库
-- ✅ 无需认证，易于部署
-- ✅ 多平台支持：Windows、Linux（可通过配置文件扩展）
-
-### 系统要求
-
-- Docker 20.10 或更高版本
-- 至少 1 GB 可用磁盘空间
-- （构建时）网络连接以下载包
 
 ---
 
@@ -44,18 +22,39 @@ git clone <repository-url>
 cd offline-pypi
 ```
 
-### 2. 构建镜像
+### 2. 下载 Python 包
 
 ```bash
-docker build -f Dockerfile.pip-download -t offline-pypi:latest .
+./download_packages.sh
 ```
 
-构建时间约 5-10 分钟，取决于网络速度。
+脚本会自动：
+- 读取 `requirements.txt` 中的包列表
+- 根据 `platforms.conf` 下载多平台版本
+- 根据 `python_versions.conf` 下载多 Python 版本
+- 将所有包保存到 `./packages` 目录
 
-### 3. 运行容器
+下载时间约 5-10 分钟，取决于网络速度和包数量。
+
+### 3. 启动服务
+
+**使用 Docker Compose（推荐）**：
 
 ```bash
-docker run -d -p 8080:8080 --name offline-pypi offline-pypi:latest
+docker-compose up -d
+```
+
+**或手动运行**：
+
+```bash
+# 构建镜像
+docker build -f Dockerfile.pypiserver -t offline-pypi:latest .
+
+# 运行容器
+docker run -d -p 8080:8080 \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
+  --name offline-pypi \
+  offline-pypi:latest
 ```
 
 ### 4. 验证服务
@@ -70,24 +69,52 @@ pip install --index-url http://localhost:8080/simple/ --trusted-host localhost n
 
 ---
 
-## 构建镜像
+## 下载脚本使用
 
-### 标准构建
+`download_packages.sh` 是一个功能完整的包下载脚本，支持多种选项。
 
-使用 `Dockerfile.pip-download`（推荐）：
+### 基本用法
 
 ```bash
-docker build -f Dockerfile.pip-download -t offline-pypi:latest .
+# 使用默认配置下载
+./download_packages.sh
 ```
 
-**优点**：
-- 使用国内镜像源，下载速度快
-- 构建时间短
-- 镜像体积小
+### 命令行选项
 
-### 自定义包列表
+```bash
+./download_packages.sh [选项]
 
-编辑 `requirements.txt` 文件，添加或删除需要的包：
+选项:
+  -r, --requirements FILE   指定 requirements.txt 文件 (默认: ./requirements.txt)
+  -o, --output DIR          指定输出目录 (默认: ./packages)
+  -p, --platforms FILE      指定平台配置文件 (默认: ./platforms.conf)
+  -v, --versions FILE       指定 Python 版本配置文件 (默认: ./python_versions.conf)
+  -m, --mirror URL          指定 PyPI 镜像源 (默认: https://mirrors.aliyun.com/pypi/simple/)
+  -h, --help                显示帮助信息
+```
+
+### 使用示例
+
+```bash
+# 指定输出目录
+./download_packages.sh -o /data/pypi-packages
+
+# 指定依赖文件
+./download_packages.sh -r my-requirements.txt
+
+# 使用官方 PyPI 源
+./download_packages.sh -m https://pypi.org/simple/
+
+# 组合使用
+./download_packages.sh -r custom.txt -o /data/packages -m https://pypi.tuna.tsinghua.edu.cn/simple/
+```
+
+### 配置文件说明
+
+#### requirements.txt
+
+指定需要下载的 Python 包：
 
 ```text
 # 核心依赖
@@ -104,13 +131,12 @@ scikit-learn
 
 # 你的自定义包
 your-package-name
+your-package==1.2.3  # 可指定版本
 ```
 
-然后重新构建镜像。
+#### platforms.conf
 
-### 自定义平台支持
-
-编辑 `platforms.conf` 文件，配置需要支持的操作系统平台：
+定义需要支持的操作系统平台：
 
 ```text
 # 平台配置文件
@@ -142,11 +168,9 @@ win_amd64
 | macOS Intel | `macosx_10_9_x86_64` |
 | macOS ARM | `macosx_11_0_arm64` |
 
-修改后重新构建镜像即可。
+#### python_versions.conf
 
-### 自定义 Python 版本支持
-
-编辑 `python_versions.conf` 文件，配置需要支持的 Python 版本：
+定义需要支持的 Python 版本：
 
 ```text
 # Python 版本配置文件
@@ -176,64 +200,63 @@ win_amd64
 | Python 3.12 | `312`  |
 | Python 3.13 | `313`  |
 
-修改后重新构建镜像即可。
-
-> **注意**：启用多个版本会增加镜像大小和构建时间。
-
-### 构建参数
-
-你可以使用 Docker 构建参数来自定义镜像：
-
-```bash
-# 使用不同的 Python 版本
-docker build -f Dockerfile.pip-download \
-  --build-arg PYTHON_VERSION=3.11 \
-  -t offline-pypi:py311 .
-```
+> **注意**：启用多个版本和平台会增加下载时间和磁盘占用。
 
 ---
 
 ## 运行容器
 
-### 基本运行
+### 方法一：Docker Compose（推荐）
 
 ```bash
-docker run -d -p 8080:8080 --name offline-pypi offline-pypi:latest
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
 ```
 
-### 使用自定义端口
+### 方法二：手动运行
 
-```bash
-docker run -d -p 9000:8080 --name offline-pypi offline-pypi:latest
-```
-
-然后通过 `http://localhost:9000/` 访问。
-
-### 持久化存储（推荐）
-
-如果需要在容器重启后保留数据：
+#### 基本运行
 
 ```bash
 docker run -d -p 8080:8080 \
-  -v pypi-packages:/opt/pypi/packages \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
   --name offline-pypi \
   offline-pypi:latest
 ```
 
-### 后台运行与自动重启
+#### 使用自定义端口
+
+```bash
+docker run -d -p 9000:8080 \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
+  --name offline-pypi \
+  offline-pypi:latest
+```
+
+然后通过 `http://localhost:9000/` 访问。
+
+#### 后台运行与自动重启
 
 ```bash
 docker run -d \
   -p 8080:8080 \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
   --name offline-pypi \
   --restart unless-stopped \
   offline-pypi:latest
 ```
 
-### 资源限制
+#### 资源限制
 
 ```bash
 docker run -d -p 8080:8080 \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
   --name offline-pypi \
   --memory="512m" \
   --cpus="0.5" \
@@ -447,6 +470,7 @@ pip install -r requirements.txt
 
 ```bash
 docker run -d -p 0.0.0.0:8080:8080 \
+  -v $(pwd)/packages:/opt/pypi/packages:ro \
   --name offline-pypi \
   offline-pypi:latest
 ```
@@ -459,21 +483,42 @@ pip install --index-url http://192.168.1.100:8080/simple/ \
   numpy
 ```
 
-### 启用认证
-
-修改 `Dockerfile.pip-download` 的 CMD 行：
-
-```dockerfile
-CMD ["pypi-server", "run", "-p", "8080", \
-     "-P", "/path/to/.htpasswd", \
-     "-a", "update,download", \
-     "/opt/pypi/packages"]
-```
-
-创建密码文件：
+### 自定义包目录
 
 ```bash
+# 下载到指定目录
+./download_packages.sh -o /data/pypi-packages
+
+# 挂载该目录启动服务
+docker run -d -p 8080:8080 \
+  -v /data/pypi-packages:/opt/pypi/packages:ro \
+  --name offline-pypi \
+  offline-pypi:latest
+```
+
+### 启用认证
+
+1. 创建密码文件：
+
+```bash
+# 安装 htpasswd 工具
+apt-get install apache2-utils  # Debian/Ubuntu
+# 或 yum install httpd-tools   # CentOS/RHEL
+
+# 创建密码文件
 htpasswd -sc .htpasswd username
+```
+
+2. 修改 `docker-compose.yml` 添加认证配置：
+
+```yaml
+services:
+  pypiserver:
+    # ... 其他配置 ...
+    volumes:
+      - ./packages:/opt/pypi/packages:ro
+      - ./.htpasswd:/opt/pypi/.htpasswd:ro
+    command: ["pypi-server", "run", "-p", "8080", "-P", "/opt/pypi/.htpasswd", "-a", "update,download", "/opt/pypi/packages"]
 ```
 
 ### 查看可用包列表
@@ -498,15 +543,26 @@ curl http://localhost:8080/simple/numpy/
 
 ## 维护与更新
 
+### 更新 Python 包（推荐方式）
+
+使用磁盘映射方案时，更新包非常简单，**无需重建镜像**：
+
+```bash
+# 1. 编辑 requirements.txt 添加/修改包
+
+# 2. 重新运行下载脚本
+./download_packages.sh
+
+# 3. 服务会自动识别新包，无需重启容器
+```
+
 ### 查看容器日志
 
 ```bash
-docker logs offline-pypi
-```
+# Docker Compose
+docker-compose logs -f
 
-实时查看日志：
-
-```bash
+# 手动运行的容器
 docker logs -f offline-pypi
 ```
 
@@ -519,71 +575,78 @@ docker ps | grep offline-pypi
 ### 重启容器
 
 ```bash
+# Docker Compose
+docker-compose restart
+
+# 手动运行的容器
 docker restart offline-pypi
 ```
 
-### 停止容器
+### 停止服务
 
 ```bash
-docker stop offline-pypi
-```
+# Docker Compose
+docker-compose down
 
-### 删除容器
-
-```bash
+# 手动运行的容器
 docker stop offline-pypi
 docker rm offline-pypi
 ```
 
-### 更新包列表
+### 重建镜像
 
-1. 修改 `requirements.txt`
-2. 重新构建镜像：
-
-```bash
-docker build -f Dockerfile.pip-download -t offline-pypi:latest .
-```
-
-3. 停止并删除旧容器：
+如果需要更新 pypiserver 版本或修改基础配置：
 
 ```bash
-docker stop offline-pypi
-docker rm offline-pypi
-```
+# 重新构建镜像
+docker build -f Dockerfile.pypiserver -t offline-pypi:latest .
 
-4. 运行新容器：
-
-```bash
-docker run -d -p 8080:8080 --name offline-pypi offline-pypi:latest
+# 重启服务
+docker-compose down
+docker-compose up -d
 ```
 
 ### 备份包文件
 
 ```bash
-# 从容器中复制包文件
-docker cp offline-pypi:/opt/pypi/packages ./backup/
+# 直接备份 packages 目录
+tar -czf pypi-packages-backup.tar.gz packages/
 
-# 或使用 volume 备份
-docker run --rm \
-  -v pypi-packages:/data \
-  -v $(pwd)/backup:/backup \
-  alpine tar czf /backup/pypi-packages.tar.gz -C /data .
+# 或复制到其他位置
+cp -r packages/ /backup/pypi-packages/
 ```
 
 ### 恢复包文件
 
 ```bash
-docker run -d -p 8080:8080 \
-  -v $(pwd)/backup/packages:/opt/pypi/packages \
-  --name offline-pypi \
-  offline-pypi:latest
+# 解压备份
+tar -xzf pypi-packages-backup.tar.gz
+
+# 启动服务
+docker-compose up -d
+```
+
+### 添加私有包
+
+```bash
+# 直接将 wheel 文件复制到 packages 目录
+cp your-private-package.whl packages/
+
+# pypiserver 会自动识别新包
 ```
 
 ---
 
 ## 常见问题
 
-### Q1: 支持哪些操作系统和平台？
+### Q1: 两种方案如何选择？
+
+| 方案 | 适用场景 | 特点 |
+|------|----------|------|
+| 磁盘映射（推荐） | 包需要经常更新、有外部存储、开发测试环境 | 更新方便，镜像小 |
+| 内置镜像 | 无法挂载外部存储、包列表固定、生产环境 | 部署简单，自包含 |
+
+### Q2: 支持哪些操作系统和平台？
 
 **默认支持的平台**：
 - ✅ Windows 64位 (win_amd64)
@@ -594,17 +657,15 @@ docker run -d -p 8080:8080 \
 - macOS Intel (macosx_10_9_x86_64)
 - macOS Apple Silicon (macosx_11_0_arm64)
 
-通过编辑 `platforms.conf` 文件可以自定义支持的平台。
-
-### Q2: 为什么安装包时提示 "No matching distribution found"？
+### Q3: 为什么安装包时提示 "No matching distribution found"？
 
 **原因**：仓库中的包版本与你的 Python 版本或平台不匹配。
 
 **解决方案**：
-- 镜像使用 Python 3.10 构建，只包含 cp310 的 wheel 文件
-- 确保你的环境也使用 Python 3.10
+- 默认支持 Python 3.10，确保客户端版本匹配
+- 编辑 `python_versions.conf` 添加需要的 Python 版本
+- 重新运行 `./download_packages.sh`
 - 某些包可能没有预编译的 wheel（如纯 C 扩展），需要源码编译
-- 或者重新构建镜像时使用你需要的 Python 版本
 
 ### Q4: 如何支持多个 Python 版本？
 
@@ -621,24 +682,34 @@ docker run -d -p 8080:8080 \
 312
 ```
 
-然后重新构建镜像：
+然后重新运行下载脚本：
 
 ```bash
-docker build -f Dockerfile.pip-download -t offline-pypi:latest .
+./download_packages.sh
 ```
 
-构建时会自动为每个 Python 版本 + 平台组合下载包。
+### Q5: 下载速度慢怎么办？
 
-### Q5: 构建镜像时下载速度慢怎么办？
-
-- 确保 `Dockerfile.pip-download` 中配置了国内镜像源（阿里云/清华）
-- 检查网络连接
-- 尝试在网络较好的时段构建
-
-### Q6: 如何查看镜像大小？
+- 脚本默认使用阿里云镜像源
+- 可以尝试其他镜像源：
 
 ```bash
-docker images offline-pypi
+# 清华大学源
+./download_packages.sh -m https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# 中科大源
+./download_packages.sh -m https://pypi.mirrors.ustc.edu.cn/simple/
+```
+
+### Q6: 如何查看已下载的包？
+
+```bash
+# 查看包数量和大小
+ls -la packages/
+du -sh packages/
+
+# 查看特定包
+ls packages/ | grep numpy
 ```
 
 ### Q7: 容器占用多少内存？
@@ -651,35 +722,56 @@ docker stats offline-pypi
 
 可以，但建议：
 - 启用认证保护
-- 配置 HTTPS
-- 使用 volume 持久化数据
+- 配置 HTTPS（通过反向代理）
 - 配置自动重启策略
-- 定期备份
+- 定期备份 packages 目录
+- 使用只读挂载 (`:ro`)
 
-### Q9: 如何添加自己的私有包？
+### Q9: 如何迁移到另一台服务器？
 
 ```bash
-# 将本地 wheel 文件复制到容器
-docker cp your-package.whl offline-pypi:/opt/pypi/packages/
+# 在源服务器上
+tar -czf offline-pypi-backup.tar.gz packages/ requirements.txt platforms.conf python_versions.conf
 
-# 或在构建时添加
-COPY ./local-packages/*.whl /opt/pypi/packages/
+# 复制到目标服务器
+scp offline-pypi-backup.tar.gz user@target-server:/path/to/
+
+# 在目标服务器上
+tar -xzf offline-pypi-backup.tar.gz
+docker-compose up -d
 ```
 
 ---
 
 ## 故障排除
 
+### 下载脚本执行失败
+
+**检查依赖**：
+```bash
+# 确保 pip 可用
+pip --version
+
+# 确保脚本有执行权限
+chmod +x download_packages.sh
+```
+
+**常见错误**：
+- 网络问题：检查网络连接或更换镜像源
+- 权限问题：使用 `sudo` 或检查目录权限
+
 ### 服务无法启动
 
 **检查容器日志**：
 ```bash
+docker-compose logs
+# 或
 docker logs offline-pypi
 ```
 
 **常见错误**：
 - 端口冲突：更换端口或停止占用 8080 端口的服务
-- 权限问题：使用 `docker run` 时添加 `--user` 参数
+- 挂载失败：确保 packages 目录存在且有读取权限
 
 ### 无法连接到服务
 
@@ -748,26 +840,3 @@ pip install --index-url http://localhost:8080/simple/ \
   --trusted-host localhost \
   PACKAGE_NAME==1.2.3
 ```
-
----
-
-## 附录
-
-### A. 镜像信息
-
-- **基础镜像**: `python:3.10-slim`
-- **镜像大小**: ~780 MB
-- **包存储**: ~183 MB
-- **默认端口**: 8080
-- **包管理工具**: pypiserver 2.4.0
-
-### B. 包含的包列表
-
-查看 `requirements.txt` 文件获取完整列表。核心包包括：
-
-- **基础工具**: pip, setuptools, wheel
-- **科学计算**: numpy, scipy, pandas, matplotlib, scikit-learn
-- **数据处理**: h5py, netcdf4, lxml
-- **网络请求**: requests
-- **图像处理**: opencv-python, pillow
-
