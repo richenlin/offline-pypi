@@ -309,10 +309,10 @@ main() {
     echo "  1. 启动 pypiserver 服务:"
     echo "     docker-compose up -d"
     echo ""
-    echo "  2. 或直接运行容器:"
-    echo "     docker run -d -p 8080:8080 -v ${PACKAGES_DIR}:/opt/pypi/packages offline-pypi"
+    echo "  或直接运行容器:"
+    echo "     docker run -d -p 8080:8080 --restart always -v ${PACKAGES_DIR}:/opt/pypi/packages offline-pypi"
     echo ""
-    echo "  3. 配置 pip 使用本地源:"
+    echo "  2. 配置 pip 使用本地源:"
     echo "     pip install --index-url http://localhost:8080/simple/ <package>"
     echo ""
 }
